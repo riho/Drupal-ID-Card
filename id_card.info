@@ -1,0 +1,8 @@
+core = "7.x"
+description = "Estonian ID-Card login support"
+name = "ID-Card"
+package = "ID card authentication"
+project = "id_card"
+version = "7.x-0.1"
+features[variable][] = ""
+configure = admin/config/people/id_card

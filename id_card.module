@@ -1,0 +1,267 @@
+<?php
+/**
+ * @file
+ * 
+ * Requires ID card support for Apache (or IIS) on the server.
+ * Instructions for installation can be found at http://www.id.ee/?id=10737
+ * 
+ * Also needs ID card authentication enabled on "id_card_login" url.
+ * Example of Apache configuration:
+ *  <Location /id_card_login>
+ *      SSLOptions +StdEnvVars +ExportCertData
+ *      SSLRequireSSL
+ *      SSLVerifyClient require
+ *      SSLVerifyDepth 2
+ *  </Location>
+ * 
+ * If your Drupal installation is in a subdirectory, replace the location with the following:
+ * <Location /SUBDIRECTORY/id_card_login>
+ * 
+ *
+ * @TODO list:
+ *    1. Configuration option to set the default role/group for new users created with the module
+ *    2. Help hook for the module
+ *    3. Create field_firstname, field_lastname fields for user
+ *    4. Estonian localization
+ *    5. Add a README file
+ */
+
+function id_card_init() {
+    drupal_add_css(drupal_get_path('module', 'id_card') . '/id_card.css');
+}
+
+/**
+ * Implementation of hook_menu().
+ *
+ * @return array menu items
+ */
+function id_card_menu() {
+	$items = array();
+
+    $items['admin/config/people/id_card'] = array(
+        'title' => 'ID-Card',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('id_card_admin_form'),
+        'description' => 'Configure ID-Card settings',
+        'access arguments' => array('administer id_card'),
+        'type' => MENU_CALLBACK,
+    );
+
+    $items['id_card_login'] = array(
+        'title' => 'ID-Card login',
+        'page callback' => 'id_card_login',
+        'description' => 'ID-Card login page',
+        'access callback' => 'user_is_anonymous',
+        'type' => MENU_CALLBACK,
+    );
+    
+    $items['user/%user/id_card'] = array(
+        'title' => 'ID-Card',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('id_card_user_form', 1),
+        // @TODO: This also gives access to user himself, so he can change his ID code, which might not be a good idea
+        'access callback' => 'user_edit_access',
+        'access arguments' => array(1),
+        'type' => MENU_LOCAL_TASK,
+    );    
+    
+	return $items;
+}
+
+function id_card_block_info() {
+    $blocks['id_card'] = array(
+        'info' => t('ID-Card login'), 
+        'cache' => DRUPAL_NO_CACHE,
+    );
+
+    return $blocks;
+}
+
+function id_card_block_view($delta = '') {
+    $block = array();
+
+    if ($delta == 'id_card') {
+        // This is needed to create the https:// url below
+        variable_set('https', true);
+        
+        $block['subject'] = t('ID-Card login');
+        // @TODO: Put this html into a sepparate template
+        $block['content'] = '<div class="id-card-login-wrapper">' .
+            l(t('Log in with ID-Card'),
+                'id_card_login',
+                array(
+                    'attributes' => array('class' => array('id-card-login-link')),
+                    'absolute' => true,
+                    'https' => true,
+                )
+            ) . '</div>';
+    }
+    
+    return $block;
+}
+
+/**
+ * Global settings form for id_card module
+ *
+ * @return array form
+ */
+function id_card_admin_form($form) {
+	$form['id_card']['id_card_create_new_user'] = array(
+		'#type' => 'checkbox',
+		'#title' => t('Create new user on first login'),
+        '#description' => t('If checked, a new user is created when it doesn\'t exist yet. Leave unchecked to deny ID-Card access for unknown users.'),
+        '#default_value' => variable_get('id_card_create_new_user', '1'),
+	);
+    
+	$form['id_card']['id_card_alter_user_login_form'] = array(
+		'#type' => 'checkbox',
+		'#title' => t('Attach to default user login form'),
+        '#description' => t('Alters the default Drupal user login form and adds a button to log in with ID-Card.'),
+        '#default_value' => variable_get('id_card_alter_user_login_form', '0'),
+	);    
+    
+    // @TODO: Setting default role/group for new users
+
+    return system_settings_form($form);
+}
+
+/**
+ * The form to set the users Estonian ID code to use with ID-Card
+ *
+ * @return array form
+ */
+function id_card_user_form($form, $form_state, $user_info) {
+    if ($user_info) {
+        // @TODO: Not sure if there's a function for this, getting authname (in this case the Estonian ID code) by user id
+        $authname = db_query("SELECT authname FROM {authmap} WHERE uid = :uid AND module = :module",
+                array(
+                    ':uid' => $user_info->uid,
+                    ':module' => 'id_card',
+                )
+            )->fetchField();
+    } else {
+        $authname = '';
+    }
+    
+	$form['id_card']['id_card_user_id_code'] = array(
+		'#type' => 'textfield',
+		'#title' => t('ID code'),
+        '#description' => t('Estonian ID code of the user. Warning - user might not be able to log in using ID-Card anymore if changed. Leave empty to disable ID-Card access for the user.'),
+        '#default_value' => $authname,
+	);
+    
+    $form['submit'] = array(
+        '#type' => 'submit',
+		'#value' => t('Save'),
+        '#submit' => array('id_card_user_form_submit'),
+    );
+    
+    $form['id_card_uid'] = array(
+        '#type' => 'value',
+        '#value' => $user_info->uid,
+    );
+    
+    return $form;
+}
+
+/**
+ * Saves the users Estonian ID code to use with ID-Card
+ */
+function id_card_user_form_submit($form, $form_state) {
+    $user_info = user_load($form_state['values']['id_card_uid']);
+    user_set_authmaps($user_info, array('authname_id_card' => $form_state['values']['id_card_user_id_code']));
+}
+
+// @TODO: Help hook for the module
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function id_card_form_user_login_block_alter(&$form, &$form_state) {
+    _id_card_user_login_form_alter($form, $form_state);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function id_card_form_user_login_alter(&$form, &$form_state) {
+    _id_card_user_login_form_alter($form, $form_state);
+}
+
+/**
+ * Alters the use form to add ID-Card login support
+ */
+function _id_card_user_login_form_alter(&$form, &$form_state) {
+    if (variable_get('id_card_alter_user_login_form', '0')) {
+        $items = array(array(
+            'data' => '<a href="#">' . t('Log in with ID-Card') . '</a>',
+            'class' => array('id-card-login-link'),
+        ));
+        
+        $form['id_card']['id_card_links'] = array(
+            '#theme' => 'item_list',
+            '#items' => $items,
+            '#attributes' => array('class' => array('id-card-login-wrapper')),
+            '#weight' => 1,
+        );
+    }
+}
+
+/**
+ * Outputs the login page with instuctions or error in case ID-Card service failed
+ * (ie. wrong or non-registered ID-Card phone number)
+ * 
+ * @return string description
+ */
+function id_card_login() {
+    global $user;
+    
+    if (!$user->uid) {
+        // @TODO: Testing this I found that the value was in REDIRECT_SSL_CLIENT_VERIFY instead of SSL_CLIENT_VERIFY, maybe should check both?
+        if (@$_SERVER['REDIRECT_SSL_CLIENT_VERIFY'] == 'SUCCESS') {
+            if ($_SERVER['REDIRECT_SSL_CLIENT_S_DN_CN']) {
+                // Extract the ID Code from SSL_CLIENT_S_DN_CN
+                list($lastname, $firstname, $id_code) = explode(',', $_SERVER['REDIRECT_SSL_CLIENT_S_DN_CN']);
+
+                if (variable_get('id_card_create_new_user', '1')) {
+                    user_external_login_register($id_code, 'id_card');
+                    // @TODO: Redirect to front page instead
+                    return '<div class="id-card-login-successful">' . t('Logged in with @id_code.', array('@id_code' => $id_code)) . '</div>';
+                } else {
+                    $user_info = user_external_load($id_code, 'id_card');
+                    // Creation of new users is disabled, so check if it exists
+                    if ($user_info) {
+                        global $user;
+                        $user = $user_info;
+                        user_login_finalize();
+                    } else {
+                        return '<div class="id-card-login-error">' . t('Access denied for @id_code', array('@id_code' => $id_code)) . '</div>';;
+                    }
+                }                
+            } else {
+                // @TODO: ID code could also be extracted from another $_SERVER value
+                // @TODO: Explain the error a bit better
+                return '<div class="id-card-login-error">' . t('Authentication failed!') . '</div>';
+            }
+        } else {
+            return '<div class="id-card-login-error">' . t('Authentication failed!') . '</div>';
+        }
+    }
+
+    return '';
+}
+
+// @TODO: This seems like a hack, maybe there's a better way to hide the block on certain pages
+function id_card_block_view_alter(&$data, $block) {
+    // Hide the default user login block on id_card_login page
+    if ($block->module == 'user' && $block->delta == 'login' && $_GET['q'] == 'id_card_login') {
+        $data = array();
+    }
+
+    global $user;
+    
+    if (($block->module == 'id_card' && $block->delta == 'id_card') && ($_GET['q'] == 'id_card_login' || $_GET['q'] == 'mobiil_id_login' || $user->uid)) {
+        $data = array();
+    }
+    
+}

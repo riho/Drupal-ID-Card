@@ -1,0 +1,10 @@
+.id-card-login-link {
+    display: block;
+    background-image: url('id_kaart.gif');
+    background-repeat: no-repeat;
+    text-indent:-9999px;
+    width: 88px;
+    height: 31px;
+    cursor: pointer;
+    clear: both;
+}
