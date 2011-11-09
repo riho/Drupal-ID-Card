@@ -170,10 +170,21 @@ function id_card_form_user_login_alter(&$form, &$form_state) {
  */
 function _id_card_user_login_form_alter(&$form, &$form_state) {
     if (variable_get('id_card_alter_user_login_form', '0')) {
+        variable_set('https', true);
+      
         $items = array(array(
-            'data' => '<a href="#">' . t('Log in with ID-Card') . '</a>',
-            'class' => array('id-card-login-link'),
+          'data' => '<div class="id-card-login-wrapper">' .
+					l(t('Log in with ID-Card'),
+						'id_card_login',
+						array(
+							'attributes' => array('class' => array('id-card-login-link')),
+							'absolute' => true,
+							'https' => true,
+						)
+					) . '</div>'
         ));
+        
+        $form['id_card']['#weight'] = 1;
         
         $form['id_card']['id_card_links'] = array(
             '#theme' => 'item_list',

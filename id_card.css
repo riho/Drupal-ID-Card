@@ -1,10 +1,13 @@
+ul.id-card-login-wrapper li {
+	list-style: none;
+}
+
 .id-card-login-link {
-    display: block;
-    background-image: url('id_kaart.gif');
-    background-repeat: no-repeat;
-    text-indent:-9999px;
-    width: 88px;
-    height: 31px;
-    cursor: pointer;
-    clear: both;
+  display: block;
+  background: transparent url('id_kaart.gif') no-repeat;
+  text-indent: -9999px;
+  width: 88px;
+  height: 31px;
+  cursor: pointer;
+  clear: both;
 }

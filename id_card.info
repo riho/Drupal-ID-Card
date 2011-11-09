@@ -3,5 +3,5 @@ description = "Estonian ID-Card login support"
 name = "ID-Card"
 package = "ID card authentication"
 project = "id_card"
-version = "7.x-1.0-beta1"
+version = "7.x-1.0-beta2"
 configure = admin/config/people/id_card
