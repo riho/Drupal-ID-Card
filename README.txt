@@ -8,15 +8,15 @@ Instructions for installation can be found at http://www.id.ee/?id=10737
 
 Also needs ID card authentication enabled on "id_card_login" url.
 Example of Apache configuration:
-	<Location /id_card_login>
+	<LocationMatch "/(\w\w/)?id_card_login">
 		SSLOptions +StdEnvVars +ExportCertData
 		SSLRequireSSL
 		SSLVerifyClient require
 		SSLVerifyDepth 2
-	</Location>
+	</LocationMatch>
 
 If your Drupal installation is in a subdirectory, replace the location with the following:
-	<Location /SUBDIRECTORY/id_card_login>
+	<LocationMatch "/SUBDIRECTORY/(\w\w/)?id_card_login">
 
 TODO list:
    1. Configuration option to set the default role/group for new users created with the module
